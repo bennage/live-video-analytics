@@ -1,0 +1,268 @@
+#!/usr/bin/env bash
+
+#######################################################################################################################
+# This script does ...                                                                                                #
+#                                                                                                                     #
+#                                                                                                                     #
+# Do not be in the habit of executing scripts from the internet with root-level access to your machine. Only trust    #
+# well-known publishers.                                                                                              #
+#######################################################################################################################
+
+# colors for formatting the ouput
+YELLOW='\033[1;33m'
+GREEN='\033[1;32m'
+RED='\033[0;31m'
+BLUE='\033[1;34m'
+NC='\033[0m' # No Color
+
+# script configuration
+DEFAULT_REGION='centralus'
+ENV_FILE='./edge-deployment/.env'
+APP_SETTINGS_FILE='./appsettings.json'
+CLOUD_INIT_FILE='./cloud-init.yml'
+VM_CREDENTIALS_FILE='./vm-edge-device-credentials.txt'
+ARM_TEMPLATE_URL='https://gist.githubusercontent.com/bennage/7acfcc31f78023a0b1587a26cd107893/raw/650c8cf7b8a8419271bc9b3f0412720f6ad1ddd3/deploy.json'
+CLOUD_INIT_URL='https://gist.githubusercontent.com/bennage/7acfcc31f78023a0b1587a26cd107893/raw/650c8cf7b8a8419271bc9b3f0412720f6ad1ddd3/cloud-init.yml'
+RESOURCE_GROUP='lva-sample-resources'
+IOT_EDGE_VM_NAME='lva-sample-iot-edge-device'
+IOT_EDGE_VM_ADMIN='lvaadmin'
+IOT_EDGE_VM_PWD="Password@$(shuf -i 1000-9999 -n 1)"
+
+checkForError() {
+    if [ $? -ne 0 ]; then
+        echo -e "\n${RED}Something went wrong:${NC}
+    Please read any error messages carefully.
+    After addressing any errors, you can safely run this script again.
+    Note:
+    - If you rerun the script with the same subscription and resource group,
+      it will attempt to continue where it left off.
+    - Some problems with Azure Cloud Shell may be restarting from the toolbar:
+      https://docs.microsoft.com/azure/cloud-shell/using-the-shell-window#restart-cloud-shell
+    "
+        exit 1
+    fi
+}
+
+echo -e "
+Welcome! \U1F9D9\n
+This script will set up a number of prerequisite resources so 
+that you can run the ${BLUE}Live Video Analytics${NC} samples:
+https://github.com/Azure-Samples/live-video-analytics-edge
+"
+sleep 2 # time for the reader 
+
+# configure ouput location base if running in Cloud Shell
+if [ "$AZURE_HTTP_USER_AGENT" = "cloud-shell/1.0" ]; then
+    ENV_FILE="$HOME/clouddrive/lva-sample/.env"
+    APP_SETTINGS_FILE="$HOME/clouddrive/lva-sample/appsettings.json"
+    VM_CREDENTIALS_FILE="$HOME/clouddrive/lva-sample/vm-edge-device-credentials.txt"
+    CLOUD_INIT_FILE="$HOME/clouddrive/lva-sample/cloud-init.yml"
+fi
+echo "Initialzing output files.
+This overwrites any output files previously generated."
+mkdir -p $(dirname $ENV_FILE) && echo -n "" > $ENV_FILE
+mkdir -p $(dirname $APP_SETTINGS_FILE) && echo -n "" > $APP_SETTINGS_FILE
+mkdir -p $(dirname $VM_CREDENTIALS_FILE) && echo -n "" > $VM_CREDENTIALS_FILE
+
+# install the Azure CLI IoT extension
+echo -e "Checking for the ${BLUE}azure-iot${NC} cli extension."
+az extension show -n azure-iot -o none
+if [ $? -ne 0 ]; then
+    echo -e "Installing the ${BLUE}azure-iot${NC} cli extension."
+    az extension add --name azure-iot &> /dev/null
+else
+    echo -e "${BLUE}azure-iot${NC} cli extension was found."
+fi
+
+# do we need to log in?
+# if we are executing in the Azure Cloud Shell, we should already be logged in
+az account show -o none
+if [ $? -ne 0 ]; then
+    echo -e "\nRunning 'az login' for you."
+    az login -o none
+fi
+
+# query subscriptions
+echo -e "\n${GREEN}You have access to the following subscriptions:${NC}"
+az account list --query '[].{name:name,"subscription Id":id}' --output table
+
+echo -e "\n${GREEN}Your current subscription is:${NC}"
+az account show --query '[name,id]'
+
+echo -e "
+${YELLOW}If you want to change to a different subscription, enter the name or id.${NC}
+Or just press enter to continue with the current subscription."
+read -p ">> " SUBSCRIPTION_ID
+
+if ! test -z "$SUBSCRIPTION_ID"
+then 
+    az account set -s "$SUBSCRIPTION_ID"
+    echo -e "\n${GREEN}Now using:${NC}"
+    az account show --query '[name,id]'
+fi 
+
+# resource group
+echo -e "
+${YELLOW}What is the name of the resource group to use?${NC}
+This will create a new resource group if one doesn't exist.
+Hit enter to use the default (${BLUE}${RESOURCE_GROUP}${NC})."
+read -p ">> " tmp
+RESOURCE_GROUP=${tmp:-$RESOURCE_GROUP}
+
+# TODO: replace with az group exists
+EXISTING=$(az group list --query "[?name=='${RESOURCE_GROUP}'].{name:name}|length(@)")
+
+if test "$EXISTING" -eq 0
+then
+    echo -e "\n${GREEN}The resource group does not currently exist.${NC}"
+    echo -e "We'll create it in ${BLUE}${DEFAULT_REGION}${NC}."
+    az group create --name ${RESOURCE_GROUP} --location ${DEFAULT_REGION} -o none
+    checkForError
+fi
+
+# deploy resources
+echo -e "
+Now we'll deploy some resources to ${GREEN}${RESOURCE_GROUP}.${NC}
+This typically takes about 4 minutes, but the time may vary.
+
+The resources are defined in a template here:
+${BLUE}${ARM_TEMPLATE_URL}${NC}"
+
+az deployment group create --resource-group $RESOURCE_GROUP --template-uri $ARM_TEMPLATE_URL -o none
+checkForError
+
+# Azure resources
+echo -e "\nThese resources were deployed:"
+RESOURCES=$(az resource list --resource-group $RESOURCE_GROUP --query '[].{name:name,"Resource Type":type}' -o table)
+echo "${RESOURCES}"
+
+# capture resource configuration in variables
+IOTHUB=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.Devices\/IotHubs$/ {print $1}')
+AMS_ACCOUNT=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.Media\/mediaservices$/ {print $1}')
+VNET=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.Network\/virtualNetworks$/ {print $1}')
+EDGE_DEVICE="lva-sample-device"
+IOTHUB_CONNECTION_STRING=$(az iot hub show-connection-string --hub-name ${IOTHUB} --query='connectionString')
+
+echo -e "
+Some of the configuration for these resources can't be performed using a template.
+So, we'll handle these for you now:
+- register an IoT Edge device with the IoT Hub
+- set up a service principal (app registration) for the Media Services account
+"
+
+# configure the hub for an edge device
+echo "registering device..."
+if test -z "$(az iot hub device-identity list -n $IOTHUB | grep "deviceId" | grep $EDGE_DEVICE)"; then
+    az iot hub device-identity create --hub-name $IOTHUB --device-id $EDGE_DEVICE --edge-enabled -o none
+    checkForError
+fi
+DEVICE_CONNECTION_STRING=$(az iot hub device-identity show-connection-string --device-id $EDGE_DEVICE --hub-name $IOTHUB --query='connectionString')
+
+# creating the AMS account creates a service principal, so we'll just reset it to get the credentials
+echo "setting up service principal..."
+SPN="$AMS_ACCOUNT-access-sp" # this is the default naming convention used by `az ams account sp`
+
+if test -z "$(az ad sp list --display-name $SPN --query="[].displayName" -o tsv)"; then
+    AMS_CONNECTION=$(az ams account sp create -o yaml --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT)
+else
+    AMS_CONNECTION=$(az ams account sp reset-credentials -o yaml --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT)
+fi
+
+# capture config information
+re="AadTenantId:\s([0-9a-z\-]*)"
+AAD_TENANT_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
+
+re="AadClientId:\s([0-9a-z\-]*)"
+AAD_SERVICE_PRINCIPAL_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
+
+re="AadSecret:\s([0-9a-z\-]*)"
+AAD_SERVICE_PRINCIPAL_SECRET=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
+
+re="SubscriptionId:\s([0-9a-z\-]*)"
+SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
+
+# deploy the IoT Edge runtime on a VM
+echo -e "
+Finally, we'll deploy a VM that will act as your IoT Edge device for using the LVA samples."
+
+curl -s $CLOUD_INIT_URL > $CLOUD_INIT_FILE
+
+# here be dragons
+# sometimes a / is present in the connection string and it breaks sed
+# this escapes the /
+DEVICE_CONNECTION_STRING=${DEVICE_CONNECTION_STRING//\//\\/} 
+sed -i "s/xDEVICE_CONNECTION_STRINGx/${DEVICE_CONNECTION_STRING//\"/}/g" $CLOUD_INIT_FILE
+
+#TODO check for the existence of the VM and don't recreate if it's found
+
+az vm create \
+  --resource-group $RESOURCE_GROUP \
+  --name $IOT_EDGE_VM_NAME \
+  --image Canonical:UbuntuServer:18.04-LTS:latest \
+  --admin-username $IOT_EDGE_VM_ADMIN \
+  --admin-password $IOT_EDGE_VM_PWD \
+  --vnet-name $VNET \
+  --subnet 'default' \
+  --custom-data $CLOUD_INIT_FILE \
+  --output none
+
+checkForError
+
+#TODO delete the pip as a workaround
+
+# write env file for edge deployment
+echo "SUBSCRIPTION_ID=\"$SUBSCRIPTION_ID\"" >> $ENV_FILE
+echo "RESOURCE_GROUP=\"$RESOURCE_GROUP\"" >> $ENV_FILE
+echo "AMS_ACCOUNT=\"$AMS_ACCOUNT\"" >> $ENV_FILE
+echo "IOTHUB_CONNECTION_STRING=$IOTHUB_CONNECTION_STRING" >> $ENV_FILE
+echo "DEVICE_CONNECTION_STRING=$DEVICE_CONNECTION_STRING" >> $ENV_FILE
+echo "AAD_TENANT_ID=$AAD_TENANT_ID" >> $ENV_FILE
+echo "AAD_SERVICE_PRINCIPAL_ID=$AAD_SERVICE_PRINCIPAL_ID" >> $ENV_FILE
+echo "AAD_SERVICE_PRINCIPAL_SECRET=$AAD_SERVICE_PRINCIPAL_SECRET" >> $ENV_FILE
+echo "INPUT_VIDEO_FOLDER_ON_DEVICE=\"~/samples/input\"" >> $ENV_FILE
+echo "OUTPUT_VIDEO_FOLDER_ON_DEVICE=\"~/samples/output\"" >> $ENV_FILE
+
+echo -e "
+We've generated some configuration files for the deployed resource.
+This .env can be used with the ${GREEN}Azure IoT Tools${NC} extension in ${GREEN}Visual Studio Code${NC}.
+You can find it here:
+${BLUE}${ENV_FILE}${NC}"
+
+# write appsettings for sample code
+# TODO replace with a template
+echo "{" >> $APP_SETTINGS_FILE
+echo "    \"IoThubConnectionString\" : $IOTHUB_CONNECTION_STRING," >> $APP_SETTINGS_FILE
+echo "    \"deviceId\" : \"$EDGE_DEVICE\"," >> $APP_SETTINGS_FILE
+echo "    \"moduleId\" : \"lvaEdge\"," >> $APP_SETTINGS_FILE
+echo "    \"graphSettingsFile\" : \"graph-settings/md.json\"" >> $APP_SETTINGS_FILE
+echo -n "}" >> $APP_SETTINGS_FILE
+
+echo -e "
+The appsettings.json file is for the .NET Core sample application.
+You can find it here:
+${BLUE}${APP_SETTINGS_FILE}${NC}"
+
+echo -e "
+To access the VM acting as the IoT Edge device, 
+- locate it in the portal 
+- click Connect on the toolbar and choose Bastion
+- enter the username and password below
+
+The VM is named ${GREEN}$IOT_EDGE_VM_NAME${NC}
+Username ${GREEN}$IOT_EDGE_VM_ADMIN${NC}
+Password ${GREEN}$IOT_EDGE_VM_PWD${NC}
+
+This information can be found here:
+${BLUE}$VM_CREDENTIALS_FILE${NC}"
+
+echo $IOT_EDGE_VM_NAME >> $VM_CREDENTIALS_FILE
+echo $IOT_EDGE_VM_ADMIN >> $VM_CREDENTIALS_FILE
+echo $IOT_EDGE_VM_PWD >> $VM_CREDENTIALS_FILE
+
+echo -e "
+${GREEN}All done!${NC} \U1F44D\n
+
+Next, copy these generated files into your local copy of the sample app:
+- ${BLUE}${APP_SETTINGS_FILE}${NC}
+- ${BLUE}${ENV_FILE}${NC}
+"
