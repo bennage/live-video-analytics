@@ -101,6 +101,19 @@ then
     az account show --query '[name,id]'
 fi 
 
+# region for deployment
+echo -e "
+${YELLOW}Please select a region to deploy resources from this list: canadaeast, centralus, eastus2, francecentral, japanwest, northcentralus, switzerlandnorth, uksouth, westcentralus, westus2, eastus2euap, centraluseuap.${NC}
+Or just press enter to use ${DEFAULT_REGION}."
+read -p ">> " REGION
+
+if [[ "$REGION" =~ ^(canadaeast|centralus|eastus2|francecentral|japanwest|northcentralus|switzerlandnorth|uksouth|westcentralus|westus2|eastus2euap|centraluseuap)$ ]]; then
+    echo -e "\n${GREEN}Now using:${NC} $REGION"
+else
+    echo -e "\n${GREEN}Defaulting to :${NC} ${DEFAULT_REGION}"
+    REGION=${DEFAULT_REGION}
+fi
+
 # resource group
 echo -e "
 ${YELLOW}What is the name of the resource group to use?${NC}
@@ -115,8 +128,8 @@ EXISTING=$(az group list --query "[?name=='${RESOURCE_GROUP}'].{name:name}|lengt
 if test "$EXISTING" -eq 0
 then
     echo -e "\n${GREEN}The resource group does not currently exist.${NC}"
-    echo -e "We'll create it in ${BLUE}${DEFAULT_REGION}${NC}."
-    az group create --name ${RESOURCE_GROUP} --location ${DEFAULT_REGION} -o none
+    echo -e "We'll create it in ${BLUE}${REGION}${NC}."
+    az group create --name ${RESOURCE_GROUP} --location ${REGION} -o none
     checkForError
 fi
 
@@ -142,6 +155,9 @@ AMS_ACCOUNT=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.Media\/mediaservices$/ 
 VNET=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.Network\/virtualNetworks$/ {print $1}')
 EDGE_DEVICE="lva-sample-device"
 IOTHUB_CONNECTION_STRING=$(az iot hub show-connection-string --hub-name ${IOTHUB} --query='connectionString')
+CONTAINER_REGISTRY=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.ContainerRegistry\/registries$/ {print $1}')
+CONTAINER_REGISTRY_USERNAME=$(az acr credential show -n $CONTAINER_REGISTRY --query 'username')
+CONTAINER_REGISTRY_PASSWORD=$(az acr credential show -n $CONTAINER_REGISTRY --query 'passwords[0].value')
 
 echo -e "
 Some of the configuration for these resources can't be performed using a template.
@@ -204,6 +220,7 @@ az vm create \
   --vnet-name $VNET \
   --subnet 'default' \
   --custom-data $CLOUD_INIT_FILE \
+  --public-ip-address "" \
   --output none
 
 checkForError
@@ -219,8 +236,10 @@ echo "DEVICE_CONNECTION_STRING=$DEVICE_CONNECTION_STRING" >> $ENV_FILE
 echo "AAD_TENANT_ID=$AAD_TENANT_ID" >> $ENV_FILE
 echo "AAD_SERVICE_PRINCIPAL_ID=$AAD_SERVICE_PRINCIPAL_ID" >> $ENV_FILE
 echo "AAD_SERVICE_PRINCIPAL_SECRET=$AAD_SERVICE_PRINCIPAL_SECRET" >> $ENV_FILE
-echo "INPUT_VIDEO_FOLDER_ON_DEVICE=\"~/samples/input\"" >> $ENV_FILE
-echo "OUTPUT_VIDEO_FOLDER_ON_DEVICE=\"~/samples/output\"" >> $ENV_FILE
+echo "INPUT_VIDEO_FOLDER_ON_DEVICE=\"/home/lvaadmin/samples/input\"" >> $ENV_FILE
+echo "OUTPUT_VIDEO_FOLDER_ON_DEVICE=\"/home/lvaadmin/samples/output\"" >> $ENV_FILE
+echo "CONTAINER_REGISTRY_USERNAME_myacr=$CONTAINER_REGISTRY_USERNAME" >> $ENV_FILE
+echo "CONTAINER_REGISTRY_PASSWORD_myacr=$CONTAINER_REGISTRY_PASSWORD" >> $ENV_FILE
 
 echo -e "
 We've generated some configuration files for the deployed resource.
