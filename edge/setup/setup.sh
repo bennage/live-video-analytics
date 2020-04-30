@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 #######################################################################################################################
-# This script does ...                                                                                                #
+# This script deploys resources in Azure for use with Azure Media Services Live Video Analytics samples.              #
+# It is primarily meant to run in https://shell.azure.com/ in the Bash environment. (It will not work in PowerShell.) #
 #                                                                                                                     #
+# You will need an Azure subscription with permissions for creating service principals (owner role provides this).    #                                                                                                                #
 #                                                                                                                     #
 # Do not be in the habit of executing scripts from the internet with root-level access to your machine. Only trust    #
 # well-known publishers.                                                                                              #
@@ -74,7 +76,7 @@ else
     echo -e "${BLUE}azure-iot${NC} cli extension was found."
 fi
 
-# do we need to log in?
+# check if we need to log in
 # if we are executing in the Azure Cloud Shell, we should already be logged in
 az account show -o none
 if [ $? -ne 0 ]; then
@@ -101,7 +103,7 @@ then
     az account show --query '[name,id]'
 fi 
 
-# region for deployment
+# select a region for deployment
 echo -e "
 ${YELLOW}Please select a region to deploy resources from this list: canadaeast, centralus, eastus2, francecentral, japanwest, northcentralus, switzerlandnorth, uksouth, westcentralus, westus2, eastus2euap, centraluseuap.${NC}
 Or just press enter to use ${DEFAULT_REGION}."
@@ -114,7 +116,7 @@ else
     REGION=${DEFAULT_REGION}
 fi
 
-# resource group
+# choose a resource group
 echo -e "
 ${YELLOW}What is the name of the resource group to use?${NC}
 This will create a new resource group if one doesn't exist.
@@ -122,18 +124,16 @@ Hit enter to use the default (${BLUE}${RESOURCE_GROUP}${NC})."
 read -p ">> " tmp
 RESOURCE_GROUP=${tmp:-$RESOURCE_GROUP}
 
-# TODO: replace with az group exists
-EXISTING=$(az group list --query "[?name=='${RESOURCE_GROUP}'].{name:name}|length(@)")
+EXISTING=$(az group exists -g ${RESOURCE_GROUP})
 
-if test "$EXISTING" -eq 0
-then
+if ! $EXISTING; then
     echo -e "\n${GREEN}The resource group does not currently exist.${NC}"
     echo -e "We'll create it in ${BLUE}${REGION}${NC}."
     az group create --name ${RESOURCE_GROUP} --location ${REGION} -o none
     checkForError
 fi
 
-# deploy resources
+# deploy resources using a template
 echo -e "
 Now we'll deploy some resources to ${GREEN}${RESOURCE_GROUP}.${NC}
 This typically takes about 4 minutes, but the time may vary.
@@ -144,8 +144,9 @@ ${BLUE}${ARM_TEMPLATE_URL}${NC}"
 az deployment group create --resource-group $RESOURCE_GROUP --template-uri $ARM_TEMPLATE_URL -o none
 checkForError
 
-# Azure resources
-echo -e "\nThese resources were deployed:"
+# query the resource group to see what has been deployed
+# this includes everything in the resource group, and not just the resources deployed by the template
+echo -e "\nResource group now contains these resources:"
 RESOURCES=$(az resource list --resource-group $RESOURCE_GROUP --query '[].{name:name,"Resource Type":type}' -o table)
 echo "${RESOURCES}"
 
@@ -198,41 +199,62 @@ re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
 
 # deploy the IoT Edge runtime on a VM
-echo -e "
+az vm show -n $IOT_EDGE_VM_NAME -g $RESOURCE_GROUP &> /dev/null
+if [ $? -ne 0 ]; then
+
+    echo -e "
 Finally, we'll deploy a VM that will act as your IoT Edge device for using the LVA samples."
 
-curl -s $CLOUD_INIT_URL > $CLOUD_INIT_FILE
+    curl -s $CLOUD_INIT_URL > $CLOUD_INIT_FILE
 
-# here be dragons
-# sometimes a / is present in the connection string and it breaks sed
-# this escapes the /
-DEVICE_CONNECTION_STRING=${DEVICE_CONNECTION_STRING//\//\\/} 
-sed -i "s/xDEVICE_CONNECTION_STRINGx/${DEVICE_CONNECTION_STRING//\"/}/g" $CLOUD_INIT_FILE
+    # here be dragons
+    # sometimes a / is present in the connection string and it breaks sed
+    # this escapes the /
+    DEVICE_CONNECTION_STRING=${DEVICE_CONNECTION_STRING//\//\\/} 
+    sed -i "s/xDEVICE_CONNECTION_STRINGx/${DEVICE_CONNECTION_STRING//\"/}/g" $CLOUD_INIT_FILE
 
-#TODO check for the existence of the VM and don't recreate if it's found
+    az vm create \
+    --resource-group $RESOURCE_GROUP \
+    --name $IOT_EDGE_VM_NAME \
+    --image Canonical:UbuntuServer:18.04-LTS:latest \
+    --admin-username $IOT_EDGE_VM_ADMIN \
+    --admin-password $IOT_EDGE_VM_PWD \
+    --vnet-name $VNET \
+    --subnet 'default' \
+    --custom-data $CLOUD_INIT_FILE \
+    --public-ip-address "" \
+    --output none
 
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $IOT_EDGE_VM_NAME \
-  --image Canonical:UbuntuServer:18.04-LTS:latest \
-  --admin-username $IOT_EDGE_VM_ADMIN \
-  --admin-password $IOT_EDGE_VM_PWD \
-  --vnet-name $VNET \
-  --subnet 'default' \
-  --custom-data $CLOUD_INIT_FILE \
-  --public-ip-address "" \
-  --output none
+    checkForError
 
-checkForError
+    echo -e "
+To access the VM acting as the IoT Edge device, 
+- locate it in the portal 
+- click Connect on the toolbar and choose Bastion
+- enter the username and password below
 
-#TODO delete the pip as a workaround
+The VM is named ${GREEN}$IOT_EDGE_VM_NAME${NC}
+Username ${GREEN}$IOT_EDGE_VM_ADMIN${NC}
+Password ${GREEN}$IOT_EDGE_VM_PWD${NC}
+
+This information can be found here:
+${BLUE}$VM_CREDENTIALS_FILE${NC}"
+
+    echo $IOT_EDGE_VM_NAME >> $VM_CREDENTIALS_FILE
+    echo $IOT_EDGE_VM_ADMIN >> $VM_CREDENTIALS_FILE
+    echo $IOT_EDGE_VM_PWD >> $VM_CREDENTIALS_FILE
+
+else
+    echo -e "
+${YELLOW}NOTE${NC}: A VM named ${YELLOW}$IOT_EDGE_VM_NAME${NC} was found in ${YELLOW}${RESOURCE_GROUP}.${NC}
+We will not attempt to redeploy the VM."
+fi
 
 # write env file for edge deployment
 echo "SUBSCRIPTION_ID=\"$SUBSCRIPTION_ID\"" >> $ENV_FILE
 echo "RESOURCE_GROUP=\"$RESOURCE_GROUP\"" >> $ENV_FILE
 echo "AMS_ACCOUNT=\"$AMS_ACCOUNT\"" >> $ENV_FILE
 echo "IOTHUB_CONNECTION_STRING=$IOTHUB_CONNECTION_STRING" >> $ENV_FILE
-echo "DEVICE_CONNECTION_STRING=$DEVICE_CONNECTION_STRING" >> $ENV_FILE
 echo "AAD_TENANT_ID=$AAD_TENANT_ID" >> $ENV_FILE
 echo "AAD_SERVICE_PRINCIPAL_ID=$AAD_SERVICE_PRINCIPAL_ID" >> $ENV_FILE
 echo "AAD_SERVICE_PRINCIPAL_SECRET=$AAD_SERVICE_PRINCIPAL_SECRET" >> $ENV_FILE
@@ -248,35 +270,16 @@ You can find it here:
 ${BLUE}${ENV_FILE}${NC}"
 
 # write appsettings for sample code
-# TODO replace with a template
 echo "{" >> $APP_SETTINGS_FILE
 echo "    \"IoThubConnectionString\" : $IOTHUB_CONNECTION_STRING," >> $APP_SETTINGS_FILE
 echo "    \"deviceId\" : \"$EDGE_DEVICE\"," >> $APP_SETTINGS_FILE
-echo "    \"moduleId\" : \"lvaEdge\"," >> $APP_SETTINGS_FILE
-echo "    \"graphSettingsFile\" : \"graph-settings/md.json\"" >> $APP_SETTINGS_FILE
+echo "    \"moduleId\" : \"lvaEdge\"" >> $APP_SETTINGS_FILE
 echo -n "}" >> $APP_SETTINGS_FILE
 
 echo -e "
 The appsettings.json file is for the .NET Core sample application.
 You can find it here:
 ${BLUE}${APP_SETTINGS_FILE}${NC}"
-
-echo -e "
-To access the VM acting as the IoT Edge device, 
-- locate it in the portal 
-- click Connect on the toolbar and choose Bastion
-- enter the username and password below
-
-The VM is named ${GREEN}$IOT_EDGE_VM_NAME${NC}
-Username ${GREEN}$IOT_EDGE_VM_ADMIN${NC}
-Password ${GREEN}$IOT_EDGE_VM_PWD${NC}
-
-This information can be found here:
-${BLUE}$VM_CREDENTIALS_FILE${NC}"
-
-echo $IOT_EDGE_VM_NAME >> $VM_CREDENTIALS_FILE
-echo $IOT_EDGE_VM_ADMIN >> $VM_CREDENTIALS_FILE
-echo $IOT_EDGE_VM_PWD >> $VM_CREDENTIALS_FILE
 
 echo -e "
 ${GREEN}All done!${NC} \U1F44D\n
