@@ -92,6 +92,7 @@ echo -e "\n${GREEN}Your current subscription is:${NC}"
 az account show --query '[name,id]'
 
 echo -e "
+You will need to use a subscription with permissions for creating service principals (owner role provides this).
 ${YELLOW}If you want to change to a different subscription, enter the name or id.${NC}
 Or just press enter to continue with the current subscription."
 read -p ">> " SUBSCRIPTION_ID
