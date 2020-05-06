@@ -224,6 +224,7 @@ Finally, we'll deploy a VM that will act as your IoT Edge device for using the L
     --subnet 'default' \
     --custom-data $CLOUD_INIT_FILE \
     --public-ip-address "" \
+    --size "Standard_DS3_v2" \
     --output none
 
     checkForError
@@ -288,4 +289,6 @@ ${GREEN}All done!${NC} \U1F44D\n
 Next, copy these generated files into your local copy of the sample app:
 - ${BLUE}${APP_SETTINGS_FILE}${NC}
 - ${BLUE}${ENV_FILE}${NC}
+
+Go to https://aka.ms/lva-edge-quickstart to learn more about getting started with Live Video Analytics on IoT Edge.
 "
