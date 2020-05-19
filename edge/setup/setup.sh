@@ -23,8 +23,10 @@ ENV_FILE='./edge-deployment/.env'
 APP_SETTINGS_FILE='./appsettings.json'
 CLOUD_INIT_FILE='./cloud-init.yml'
 VM_CREDENTIALS_FILE='./vm-edge-device-credentials.txt'
-ARM_TEMPLATE_URL='https://gist.githubusercontent.com/bennage/7acfcc31f78023a0b1587a26cd107893/raw/453ea9aba04bc81854e453b1868e03f1cdf1b9b1/deploy.json'
-CLOUD_INIT_URL='https://gist.githubusercontent.com/bennage/7acfcc31f78023a0b1587a26cd107893/raw/453ea9aba04bc81854e453b1868e03f1cdf1b9b1/cloud-init.yml'
+ARM_TEMPLATE_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/deploy.json'
+CLOUD_INIT_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/cloud-init.yml'
+DEPLOYMENT_MANIFEST_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/deployment.template.json'
+DEPLOYMENT_MANIFEST_FILE='./deployment.amd64.json'
 RESOURCE_GROUP='lva-sample-resources'
 IOT_EDGE_VM_NAME='lva-sample-iot-edge-device'
 IOT_EDGE_VM_ADMIN='lvaadmin'
@@ -292,3 +294,15 @@ Next, copy these generated files into your local copy of the sample app:
 
 Go to https://aka.ms/lva-edge-quickstart to learn more about getting started with Live Video Analytics on IoT Edge.
 "
+
+# set up deployment manifest
+curl -s $DEPLOYMENT_MANIFEST_URL > $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$CONTAINER_REGISTRY_USERNAME_myacr/$CONTAINER_REGISTRY_USERNAME/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$CONTAINER_REGISTRY_PASSWORD_myacr/$CONTAINER_REGISTRY_PASSWORD/" $DEPLOYMENT_MANIFEST_FILE
+#sed -e "s/\$INPUT_VIDEO_FOLDER_ON_DEVICE//home/lvaadmin/samples/input/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$RESOURCE_GROUP/$RESOURCE_GROUP/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$AMS_ACCOUNT/$AMS_ACCOUNT/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$AAD_TENANT_ID/$AAD_TENANT_ID/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$AAD_SERVICE_PRINCIPAL_ID/$AAD_SERVICE_PRINCIPAL_ID/" $DEPLOYMENT_MANIFEST_FILE
+sed -e "s/\$AAD_SERVICE_PRINCIPAL_SECRET/$AAD_SERVICE_PRINCIPAL_SECRET/" $DEPLOYMENT_MANIFEST_FILE
