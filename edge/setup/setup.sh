@@ -162,8 +162,8 @@ VNET=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.Network\/virtualNetworks$/ {pr
 EDGE_DEVICE="lva-sample-device"
 IOTHUB_CONNECTION_STRING=$(az iot hub show-connection-string --hub-name ${IOTHUB} --query='connectionString')
 CONTAINER_REGISTRY=$(echo "${RESOURCES}" | awk '$2 ~ /Microsoft.ContainerRegistry\/registries$/ {print $1}')
-CONTAINER_REGISTRY_USERNAME=$(az acr credential show -n $CONTAINER_REGISTRY --query 'username')
-CONTAINER_REGISTRY_PASSWORD=$(az acr credential show -n $CONTAINER_REGISTRY --query 'passwords[0].value')
+CONTAINER_REGISTRY_USERNAME=$(az acr credential show -n $CONTAINER_REGISTRY --query 'username' | tr -d \")
+CONTAINER_REGISTRY_PASSWORD=$(az acr credential show -n $CONTAINER_REGISTRY --query 'passwords[0].value' | tr -d \")
 
 echo -e "
 Some of the configuration for these resources can't be performed using a template.
@@ -266,8 +266,8 @@ echo "AAD_SERVICE_PRINCIPAL_ID=$AAD_SERVICE_PRINCIPAL_ID" >> $ENV_FILE
 echo "AAD_SERVICE_PRINCIPAL_SECRET=$AAD_SERVICE_PRINCIPAL_SECRET" >> $ENV_FILE
 echo "INPUT_VIDEO_FOLDER_ON_DEVICE=\"$INPUT_VIDEO_FOLDER_ON_DEVICE\"" >> $ENV_FILE
 echo "OUTPUT_VIDEO_FOLDER_ON_DEVICE=\"$OUTPUT_VIDEO_FOLDER_ON_DEVICE\"" >> $ENV_FILE
-echo "CONTAINER_REGISTRY_USERNAME_myacr=$CONTAINER_REGISTRY_USERNAME" >> $ENV_FILE
-echo "CONTAINER_REGISTRY_PASSWORD_myacr=$CONTAINER_REGISTRY_PASSWORD" >> $ENV_FILE
+echo "CONTAINER_REGISTRY_USERNAME_myacr=\"$CONTAINER_REGISTRY_USERNAME\"" >> $ENV_FILE
+echo "CONTAINER_REGISTRY_PASSWORD_myacr=\"$CONTAINER_REGISTRY_PASSWORD\"" >> $ENV_FILE
 
 echo -e "
 We've generated some configuration files for the deployed resource.
