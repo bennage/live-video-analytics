@@ -1,0 +1,16 @@
+{
+  "Name": "LVAEdge User",
+  "IsCustom": true,
+  "Description": "Can create assets, view list of containers and view Edge policies",
+  "Actions": [
+    "Microsoft.Media/mediaservices/assets/listContainerSas/action",
+	"Microsoft.Media/mediaservices/assets/write",
+	"Microsoft.Media/mediaservices/listEdgePolicies/action"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": [
+    "/subscriptions/35c2594a-23da-4fce-b59c-f6fb9513eeeb"
+  ]
+}
