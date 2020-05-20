@@ -33,6 +33,7 @@ IOT_EDGE_VM_ADMIN='lvaadmin'
 IOT_EDGE_VM_PWD="Password@$(shuf -i 1000-9999 -n 1)"
 INPUT_VIDEO_FOLDER_ON_DEVICE='/home/lvaadmin/samples/input'
 OUTPUT_VIDEO_FOLDER_ON_DEVICE='/home/lvaadmin/samples/output'
+LVAEDGE_ROLE_DEFINITION_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/LVAEdgeUserRoleDefinition.json'
 
 checkForError() {
     if [ $? -ne 0 ]; then
@@ -202,6 +203,17 @@ AAD_SERVICE_PRINCIPAL_SECRET=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REM
 
 re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
+
+# create new role definition in the subscription
+ROLE_DEFINITION="$(curl -sL $LVAEDGE_ROLE_DEFINITION_URL)"
+az role definition create --role-definition ${ROLE_DEFINITION/'$SUBSCRIPTION_ID'/$SUBSCRIPTION_ID}
+
+# capture object_id
+OBJECT_ID=$(az ad sp show --id '${AAD_SERVICE_PRINCIPAL_ID}' --query 'objectId')
+
+# create role assignment
+az role assignment create --role "LVAEdge User" --assignee-object-id $OBJECT_ID
+echo "${OBJECT_ID} is now linked with custom role LVAEdge User."
 
 # deploy the IoT Edge runtime on a VM
 az vm show -n $IOT_EDGE_VM_NAME -g $RESOURCE_GROUP &> /dev/null
