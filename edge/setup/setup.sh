@@ -243,6 +243,7 @@ Finally, we'll deploy a VM that will act as your IoT Edge device for using the L
     --custom-data $CLOUD_INIT_FILE \
     --public-ip-address "" \
     --size "Standard_DS3_v2" \
+    --tags sample=lva \
     --output none
 
     checkForError
