@@ -28,8 +28,9 @@ CLOUD_INIT_URL="$BASE_URL/cloud-init.yml"
 CLOUD_INIT_FILE='cloud-init.yml'
 DEPLOYMENT_MANIFEST_URL="$BASE_URL/deployment.template.json"
 DEPLOYMENT_MANIFEST_FILE='deployment.amd64.json'
-LVAEDGE_ROLE_DEFINITION_URL="$BASE_URL/LVAEdgeUserRoleDefinition.json"
-LVAEDGE_ROLE_DEFINITION_FILE='role_definition.json'
+ROLE_DEFINITION_URL="$BASE_URL/LVAEdgeUserRoleDefinition.json"
+ROLE_DEFINITION_FILE='role_definition.json'
+ROLE_DEFINITION_NAME='LVAEdge User' # WARNING: This needs to match the name in the role definition file!
 RESOURCE_GROUP='lva-sample-resources'
 IOT_EDGE_VM_NAME='lva-sample-iot-edge-device'
 IOT_EDGE_VM_ADMIN='lvaadmin'
@@ -69,7 +70,7 @@ if [ "$AZURE_HTTP_USER_AGENT" = "cloud-shell/1.0" ]; then
     VM_CREDENTIALS_FILE="$CLOUD_SHELL_FOLDER/$VM_CREDENTIALS_FILE"
     CLOUD_INIT_FILE="$CLOUD_SHELL_FOLDER/$CLOUD_INIT_FILE"
     DEPLOYMENT_MANIFEST_FILE="$CLOUD_SHELL_FOLDER/$DEPLOYMENT_MANIFEST_FILE"
-    LVAEDGE_ROLE_DEFINITION_FILE="$CLOUD_SHELL_FOLDER/$LVAEDGE_ROLE_DEFINITION_FILE"
+    ROLE_DEFINITION_FILE="$CLOUD_SHELL_FOLDER/$ROLE_DEFINITION_FILE"
 fi
 echo "Initialzing output files.
 This overwrites any output files previously generated."
@@ -212,16 +213,19 @@ re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
 
 # create new role definition in the subscription
-curl -sL $LVAEDGE_ROLE_DEFINITION_URL > $LVAEDGE_ROLE_DEFINITION_FILE
-sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $LVAEDGE_ROLE_DEFINITION_FILE
-az role definition create --role-definition $LVAEDGE_ROLE_DEFINITION_FILE
-
+if test -z "$(az role definition list -n $ROLE_DEFINITION_NAME | grep "roleName")"; then
+    echo -e "Creating a custom role named ${BLUE}$ROLE_DEFINITION_NAME${NC}."
+    curl -sL $ROLE_DEFINITION_URL > $ROLE_DEFINITION_FILE
+    sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $ROLE_DEFINITION_FILE
+    az role definition create --role-definition $ROLE_DEFINITION_FILE -o none
+    checkForError
+fi
 # capture object_id
 OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | tr -d \")
 
 # create role assignment
-az role assignment create --role "LVAEdge User" --assignee-object-id $OBJECT_ID -o none
-echo "${OBJECT_ID} is now linked with custom role LVAEdge User."
+az role assignment create --role $ROLE_DEFINITION_NAME --assignee-object-id $OBJECT_ID -o none
+echo -e "The service principal with object id ${OBJECT_ID} is now linked with custom role ${BLUE}$ROLE_DEFINITION_NAME${NC}."
 
 # deploy the IoT Edge runtime on a VM
 az vm show -n $IOT_EDGE_VM_NAME -g $RESOURCE_GROUP &> /dev/null
@@ -332,5 +336,5 @@ sed -i "s/\$AAD_SERVICE_PRINCIPAL_ID/$AAD_SERVICE_PRINCIPAL_ID/" $DEPLOYMENT_MAN
 sed -i "s/\$AAD_SERVICE_PRINCIPAL_SECRET/$AAD_SERVICE_PRINCIPAL_SECRET/" $DEPLOYMENT_MANIFEST_FILE
 
 # cleanup
-rm $LVAEDGE_ROLE_DEFINITION_FILE
+rm $ROLE_DEFINITION_FILE
 rm $CLOUD_INIT_FILE
