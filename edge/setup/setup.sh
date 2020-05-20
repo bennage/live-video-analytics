@@ -18,22 +18,25 @@ BLUE='\033[1;34m'
 NC='\033[0m' # No Color
 
 # script configuration
+BASE_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge' # location of remote files used by the script
 DEFAULT_REGION='centralus'
-ENV_FILE='./edge-deployment/.env'
-APP_SETTINGS_FILE='./appsettings.json'
-VM_CREDENTIALS_FILE='./vm-edge-device-credentials.txt'
-ARM_TEMPLATE_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/deploy.json'
-CLOUD_INIT_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/cloud-init.yml'
-CLOUD_INIT_FILE='./cloud-init.yml'
-DEPLOYMENT_MANIFEST_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/deployment.template.json'
-DEPLOYMENT_MANIFEST_FILE='./deployment.amd64.json'
+ENV_FILE='edge-deployment/.env'
+APP_SETTINGS_FILE='appsettings.json'
+VM_CREDENTIALS_FILE='vm-edge-device-credentials.txt'
+ARM_TEMPLATE_URL="$BASE_URL/deploy.json"
+CLOUD_INIT_URL="$BASE_URL/cloud-init.yml"
+CLOUD_INIT_FILE='cloud-init.yml'
+DEPLOYMENT_MANIFEST_URL="$BASE_URL/deployment.template.json"
+DEPLOYMENT_MANIFEST_FILE='deployment.amd64.json'
+LVAEDGE_ROLE_DEFINITION_URL="$BASE_URL/LVAEdgeUserRoleDefinition.json"
+LVAEDGE_ROLE_DEFINITION_FILE='role_definition.json'
 RESOURCE_GROUP='lva-sample-resources'
 IOT_EDGE_VM_NAME='lva-sample-iot-edge-device'
 IOT_EDGE_VM_ADMIN='lvaadmin'
 IOT_EDGE_VM_PWD="Password@$(shuf -i 1000-9999 -n 1)"
 INPUT_VIDEO_FOLDER_ON_DEVICE='/home/lvaadmin/samples/input'
 OUTPUT_VIDEO_FOLDER_ON_DEVICE='/home/lvaadmin/samples/output'
-LVAEDGE_ROLE_DEFINITION_URL='https://raw.githubusercontent.com/bennage/live-video-analytics/setup-script/edge/setup/LVAEdgeUserRoleDefinition.json'
+CLOUD_SHELL_FOLDER="$HOME/clouddrive/lva-sample"
 
 checkForError() {
     if [ $? -ne 0 ]; then
@@ -50,6 +53,7 @@ checkForError() {
     fi
 }
 
+# let's begin!
 echo -e "
 Welcome! \U1F9D9\n
 This script will set up a number of prerequisite resources so 
@@ -60,16 +64,19 @@ sleep 2 # time for the reader
 
 # configure ouput location base if running in Cloud Shell
 if [ "$AZURE_HTTP_USER_AGENT" = "cloud-shell/1.0" ]; then
-    ENV_FILE="$HOME/clouddrive/lva-sample/.env"
-    APP_SETTINGS_FILE="$HOME/clouddrive/lva-sample/appsettings.json"
-    VM_CREDENTIALS_FILE="$HOME/clouddrive/lva-sample/vm-edge-device-credentials.txt"
-    CLOUD_INIT_FILE="$HOME/clouddrive/lva-sample/cloud-init.yml"
+    ENV_FILE="$CLOUD_SHELL_FOLDER/$ENV_FILE"
+    APP_SETTINGS_FILE="$CLOUD_SHELL_FOLDER/$APP_SETTINGS_FILE"
+    VM_CREDENTIALS_FILE="$CLOUD_SHELL_FOLDER/$VM_CREDENTIALS_FILE"
+    CLOUD_INIT_FILE="$CLOUD_SHELL_FOLDER/$CLOUD_INIT_FILE"
+    DEPLOYMENT_MANIFEST_FILE="$CLOUD_SHELL_FOLDER/$DEPLOYMENT_MANIFEST_FILE"
+    LVAEDGE_ROLE_DEFINITION_FILE="$CLOUD_SHELL_FOLDER/$LVAEDGE_ROLE_DEFINITION_FILE"
 fi
 echo "Initialzing output files.
 This overwrites any output files previously generated."
 mkdir -p $(dirname $ENV_FILE) && echo -n "" > $ENV_FILE
 mkdir -p $(dirname $APP_SETTINGS_FILE) && echo -n "" > $APP_SETTINGS_FILE
 mkdir -p $(dirname $VM_CREDENTIALS_FILE) && echo -n "" > $VM_CREDENTIALS_FILE
+mkdir -p $(dirname $DEPLOYMENT_MANIFEST_FILE) && echo -n "" > $DEPLOYMENT_MANIFEST_FILE
 
 # install the Azure CLI IoT extension
 echo -e "Checking for the ${BLUE}azure-iot${NC} cli extension."
@@ -205,10 +212,9 @@ re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
 
 # create new role definition in the subscription
-curl -sL $LVAEDGE_ROLE_DEFINITION_URL > role_definition.json
-sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" role_definition.json
-az role definition create --role-definition role_definition.json
-#rm role_definition.json
+curl -sL $LVAEDGE_ROLE_DEFINITION_URL > $LVAEDGE_ROLE_DEFINITION_FILE
+sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $LVAEDGE_ROLE_DEFINITION_FILE
+az role definition create --role-definition $LVAEDGE_ROLE_DEFINITION_FILE
 
 # capture object_id
 OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | tr -d \")
@@ -324,3 +330,7 @@ sed -i "s/\$AMS_ACCOUNT/$AMS_ACCOUNT/" $DEPLOYMENT_MANIFEST_FILE
 sed -i "s/\$AAD_TENANT_ID/$AAD_TENANT_ID/" $DEPLOYMENT_MANIFEST_FILE
 sed -i "s/\$AAD_SERVICE_PRINCIPAL_ID/$AAD_SERVICE_PRINCIPAL_ID/" $DEPLOYMENT_MANIFEST_FILE
 sed -i "s/\$AAD_SERVICE_PRINCIPAL_SECRET/$AAD_SERVICE_PRINCIPAL_SECRET/" $DEPLOYMENT_MANIFEST_FILE
+
+# cleanup
+rm $LVAEDGE_ROLE_DEFINITION_FILE
+rm $CLOUD_INIT_FILE
