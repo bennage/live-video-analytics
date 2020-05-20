@@ -205,14 +205,16 @@ re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
 
 # create new role definition in the subscription
-ROLE_DEFINITION="$(curl -sL $LVAEDGE_ROLE_DEFINITION_URL)"
-az role definition create --role-definition ${ROLE_DEFINITION/'$SUBSCRIPTION_ID'/$SUBSCRIPTION_ID}
+curl -sL $LVAEDGE_ROLE_DEFINITION_URL > role_definition.json
+sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" role_definition.json
+az role definition create --role-definition role_definition.json
+#rm role_definition.json
 
 # capture object_id
-OBJECT_ID=$(az ad sp show --id '${AAD_SERVICE_PRINCIPAL_ID}' --query 'objectId')
+OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | tr -d \")
 
 # create role assignment
-az role assignment create --role "LVAEdge User" --assignee-object-id $OBJECT_ID
+az role assignment create --role "LVAEdge User" --assignee-object-id $OBJECT_ID -o none
 echo "${OBJECT_ID} is now linked with custom role LVAEdge User."
 
 # deploy the IoT Edge runtime on a VM
