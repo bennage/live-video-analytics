@@ -126,7 +126,7 @@ read -p ">> " REGION
 if [[ "$REGION" =~ ^(canadaeast|centralus|eastus2|francecentral|japanwest|northcentralus|switzerlandnorth|uksouth|westcentralus|westus2|eastus2euap|centraluseuap)$ ]]; then
     echo -e "\n${GREEN}Now using:${NC} $REGION"
 else
-    echo -e "\n${GREEN}Defaulting to :${NC} ${DEFAULT_REGION}"
+    echo -e "\n${GREEN}Defaulting to:${NC} ${DEFAULT_REGION}"
     REGION=${DEFAULT_REGION}
 fi
 
@@ -199,16 +199,6 @@ else
     AMS_CONNECTION=$(az ams account sp reset-credentials -o yaml --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT)
 fi
 
-# The brand-new AMS account has a standard streaming endpoint in stopped state. 
-# A Premium streaming endpoint is recommended when recording multiple days’ worth of video
-
-echo "Updating the Media Services account to use one Premium streaming endpoint"
-az ams streaming-endpoint scale --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT -n default --scale-units 1
-
-echo "Kicking off the async start of the Premium streaming endpoint."
-echo "This is needed to run samples or tutorials involving video playback."
-az ams streaming-endpoint start --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT -n default --no-wait
-
 # capture config information
 re="AadTenantId:\s([0-9a-z\-]*)"
 AAD_TENANT_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
@@ -236,6 +226,17 @@ OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | 
 # create role assignment
 az role assignment create --role "$ROLE_DEFINITION_NAME" --assignee-object-id $OBJECT_ID -o none
 echo -e "The service principal with object id ${OBJECT_ID} is now linked with custom role ${BLUE}$ROLE_DEFINITION_NAME${NC}."
+
+# The brand-new AMS account has a standard streaming endpoint in stopped state. 
+# A Premium streaming endpoint is recommended when recording multiple days’ worth of video
+
+echo -e "
+Updating the Media Services account to use one ${YELLOW}Premium${NC} streaming endpoint."
+az ams streaming-endpoint scale --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT -n default --scale-units 1
+
+echo "Kicking off the async start of the Premium streaming endpoint."
+echo "  This is needed to run samples or tutorials involving video playback."
+az ams streaming-endpoint start --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT -n default --no-wait
 
 # deploy the IoT Edge runtime on a VM
 az vm show -n $IOT_EDGE_VM_NAME -g $RESOURCE_GROUP &> /dev/null
