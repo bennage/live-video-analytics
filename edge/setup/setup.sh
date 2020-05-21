@@ -319,7 +319,7 @@ Next, copy these generated files into your local copy of the sample app:
 - ${BLUE}${APP_SETTINGS_FILE}${NC}
 - ${BLUE}${ENV_FILE}${NC}
 
-Go to https://aka.ms/lva-edge-quickstart to learn more about getting started with Live Video Analytics on IoT Edge.
+Go to ${GREEN}https://aka.ms/lva-edge-quickstart${NC} to learn more about getting started with ${BLUE}Live Video Analytics${NC} on IoT Edge.
 "
 
 # set up deployment manifest
@@ -336,5 +336,5 @@ sed -i "s/\$AAD_SERVICE_PRINCIPAL_ID/$AAD_SERVICE_PRINCIPAL_ID/" $DEPLOYMENT_MAN
 sed -i "s/\$AAD_SERVICE_PRINCIPAL_SECRET/$AAD_SERVICE_PRINCIPAL_SECRET/" $DEPLOYMENT_MANIFEST_FILE
 
 # cleanup
-# rm $ROLE_DEFINITION_FILE
-# rm $CLOUD_INIT_FILE
+# rm $ROLE_DEFINITION_FILE &> /dev/null
+# rm $CLOUD_INIT_FILE &> /dev/null
