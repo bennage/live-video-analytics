@@ -54,4 +54,10 @@ runcmd:
         curl https://lvamedia.blob.core.windows.net/public/lots_015.mkv > /home/lvaadmin/samples/input/lots_015.mkv
 
         chown -R lvaadmin /home/lvaadmin/samples/
+
+        mkdir /var/local/mediaservices
+        mkdir /var/local/mediaservices/tmp
+
+        chown -R lvaadmin /var/local/mediaservices/
+
       ) &
