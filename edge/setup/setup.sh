@@ -150,7 +150,7 @@ fi
 # deploy resources using a template
 echo -e "
 Now we'll deploy some resources to ${GREEN}${RESOURCE_GROUP}.${NC}
-This typically takes about 4 minutes, but the time may vary.
+This typically takes about 6 minutes, but the time may vary.
 
 The resources are defined in a template here:
 ${BLUE}${ARM_TEMPLATE_URL}${NC}"
@@ -217,14 +217,14 @@ if test -z "$(az role definition list -n "$ROLE_DEFINITION_NAME" | grep "roleNam
     echo -e "Creating a custom role named ${BLUE}$ROLE_DEFINITION_NAME${NC}."
     curl -sL $ROLE_DEFINITION_URL > $ROLE_DEFINITION_FILE
     sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $ROLE_DEFINITION_FILE
-    az role definition create --role-definition "$ROLE_DEFINITION_FILE" -o none
+    az role definition create --role-definition $ROLE_DEFINITION_FILE -o none
     checkForError
 fi
 # capture object_id
 OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | tr -d \")
 
 # create role assignment
-az role assignment create --role $ROLE_DEFINITION_NAME --assignee-object-id $OBJECT_ID -o none
+az role assignment create --role "$ROLE_DEFINITION_NAME" --assignee-object-id $OBJECT_ID -o none
 echo -e "The service principal with object id ${OBJECT_ID} is now linked with custom role ${BLUE}$ROLE_DEFINITION_NAME${NC}."
 
 # deploy the IoT Edge runtime on a VM
@@ -336,5 +336,5 @@ sed -i "s/\$AAD_SERVICE_PRINCIPAL_ID/$AAD_SERVICE_PRINCIPAL_ID/" $DEPLOYMENT_MAN
 sed -i "s/\$AAD_SERVICE_PRINCIPAL_SECRET/$AAD_SERVICE_PRINCIPAL_SECRET/" $DEPLOYMENT_MANIFEST_FILE
 
 # cleanup
-rm $ROLE_DEFINITION_FILE
-rm $CLOUD_INIT_FILE
+# rm $ROLE_DEFINITION_FILE
+# rm $CLOUD_INIT_FILE
