@@ -213,11 +213,11 @@ re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
 
 # create new role definition in the subscription
-if test -z "$(az role definition list -n $ROLE_DEFINITION_NAME | grep "roleName")"; then
+if test -z "$(az role definition list -n "$ROLE_DEFINITION_NAME" | grep "roleName")"; then
     echo -e "Creating a custom role named ${BLUE}$ROLE_DEFINITION_NAME${NC}."
     curl -sL $ROLE_DEFINITION_URL > $ROLE_DEFINITION_FILE
     sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $ROLE_DEFINITION_FILE
-    az role definition create --role-definition $ROLE_DEFINITION_FILE -o none
+    az role definition create --role-definition "$ROLE_DEFINITION_FILE" -o none
     checkForError
 fi
 # capture object_id
