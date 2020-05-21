@@ -199,6 +199,16 @@ else
     AMS_CONNECTION=$(az ams account sp reset-credentials -o yaml --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT)
 fi
 
+# The brand-new AMS account has a standard streaming endpoint in stopped state. 
+# A Premium streaming endpoint is recommended when recording multiple days’ worth of video
+
+echo "Updating the Media Services account to use one Premium streaming endpoint"
+az ams streaming-endpoint scale --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT -n default --scale-units 1
+
+echo "Kicking off the async start of the Premium streaming endpoint."
+echo "This is needed to run samples or tutorials involving video playback."
+az ams streaming-endpoint start --resource-group $RESOURCE_GROUP --account-name $AMS_ACCOUNT -n default --no-wait
+
 # capture config information
 re="AadTenantId:\s([0-9a-z\-]*)"
 AAD_TENANT_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
