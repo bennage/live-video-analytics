@@ -154,7 +154,7 @@ This typically takes about 6 minutes, but the time may vary.
 The resources are defined in a template here:
 ${BLUE}${ARM_TEMPLATE_URL}${NC}"
 
-ROLE_DEFINITION_NAME=$(az deployment group create --resource-group $RESOURCE_GROUP --template-uri $ARM_TEMPLATE_URL --query properties.outputs.roleName.value)
+ROLE_DEFINITION_NAME=$(az deployment group create --resource-group $RESOURCE_GROUP --template-uri $ARM_TEMPLATE_URL --query properties.outputs.roleName.value | tr -d \")
 checkForError
 
 # query the resource group to see what has been deployed
