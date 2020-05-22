@@ -1,5 +1,5 @@
 {
-  "Name": "LVAEdge User",
+  "Name": "$ROLE_DEFINITION_NAME",
   "IsCustom": true,
   "Description": "Can create assets, view list of containers and view Edge policies",
   "Actions": [

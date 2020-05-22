@@ -30,7 +30,6 @@ DEPLOYMENT_MANIFEST_URL="$BASE_URL/deployment.template.json"
 DEPLOYMENT_MANIFEST_FILE='deployment.amd64.json'
 ROLE_DEFINITION_URL="$BASE_URL/LVAEdgeUserRoleDefinition.json"
 ROLE_DEFINITION_FILE='role_definition.json'
-ROLE_DEFINITION_NAME='LVAEdge User' # WARNING: This needs to match the name in the role definition file!
 RESOURCE_GROUP='lva-sample-resources'
 IOT_EDGE_VM_NAME='lva-sample-iot-edge-device'
 IOT_EDGE_VM_ADMIN='lvaadmin'
@@ -155,7 +154,7 @@ This typically takes about 6 minutes, but the time may vary.
 The resources are defined in a template here:
 ${BLUE}${ARM_TEMPLATE_URL}${NC}"
 
-az deployment group create --resource-group $RESOURCE_GROUP --template-uri $ARM_TEMPLATE_URL -o none
+ROLE_DEFINITION_NAME=$(az deployment group create --resource-group $RESOURCE_GROUP --template-uri $ARM_TEMPLATE_URL --query properties.outputs.roleName.value)
 checkForError
 
 # query the resource group to see what has been deployed
@@ -217,6 +216,8 @@ if test -z "$(az role definition list -n "$ROLE_DEFINITION_NAME" | grep "roleNam
     echo -e "Creating a custom role named ${BLUE}$ROLE_DEFINITION_NAME${NC}."
     curl -sL $ROLE_DEFINITION_URL > $ROLE_DEFINITION_FILE
     sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $ROLE_DEFINITION_FILE
+    sed -i "s/\$ROLE_DEFINITION_NAME/$ROLE_DEFINITION_NAME/" $ROLE_DEFINITION_FILE
+    
     az role definition create --role-definition $ROLE_DEFINITION_FILE -o none
     checkForError
 fi
