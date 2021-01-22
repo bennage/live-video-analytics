@@ -213,22 +213,22 @@ re="SubscriptionId:\s([0-9a-z\-]*)"
 SUBSCRIPTION_ID=$([[ "$AMS_CONNECTION" =~ $re ]] && echo ${BASH_REMATCH[1]})
 
 # create new role definition in the subscription
- if test -z "$(az role definition list -n "$ROLE_DEFINITION_NAME" | grep "roleName")"; then
-    echo -e "Creating a custom role named ${BLUE}$ROLE_DEFINITION_NAME${NC}."
-    curl -sL $ROLE_DEFINITION_URL > $ROLE_DEFINITION_FILE
-    sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $ROLE_DEFINITION_FILE
-    sed -i "s/\$ROLE_DEFINITION_NAME/$ROLE_DEFINITION_NAME/" $ROLE_DEFINITION_FILE
+# if test -z "$(az role definition list -n "$ROLE_DEFINITION_NAME" | grep "roleName")"; then
+#    echo -e "Creating a custom role named ${BLUE}$ROLE_DEFINITION_NAME${NC}."
+#    curl -sL $ROLE_DEFINITION_URL > $ROLE_DEFINITION_FILE
+#    sed -i "s/\$SUBSCRIPTION_ID/$SUBSCRIPTION_ID/" $ROLE_DEFINITION_FILE
+#    sed -i "s/\$ROLE_DEFINITION_NAME/$ROLE_DEFINITION_NAME/" $ROLE_DEFINITION_FILE
     
-    az role definition create --role-definition $ROLE_DEFINITION_FILE -o none
-    checkForError
- fi
+#    az role definition create --role-definition $ROLE_DEFINITION_FILE -o none
+#    checkForError
+# fi
 
 # capture object_id
 OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | tr -d \")
 
 # create role assignment
- az role assignment create --role "$ROLE_DEFINITION_NAME" --assignee-object-id $OBJECT_ID -o none
- echo -e "The service principal with object id ${OBJECT_ID} is now linked with custom role ${BLUE}$ROLE_DEFINITION_NAME${NC}."
+# az role assignment create --role "$ROLE_DEFINITION_NAME" --assignee-object-id $OBJECT_ID -o none
+# echo -e "The service principal with object id ${OBJECT_ID} is now linked with custom role ${BLUE}$ROLE_DEFINITION_NAME${NC}."
 
 # The brand-new AMS account has a standard streaming endpoint in stopped state. 
 # A Premium streaming endpoint is recommended when recording multiple daysÃ¢â‚¬â„¢ worth of video
