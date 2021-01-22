@@ -231,7 +231,7 @@ OBJECT_ID=$(az ad sp show --id ${AAD_SERVICE_PRINCIPAL_ID} --query 'objectId' | 
 # echo -e "The service principal with object id ${OBJECT_ID} is now linked with custom role ${BLUE}$ROLE_DEFINITION_NAME${NC}."
 
 # The brand-new AMS account has a standard streaming endpoint in stopped state. 
-# A Premium streaming endpoint is recommended when recording multiple daysÃ¢â‚¬â„¢ worth of video
+# A Premium streaming endpoint is recommended when recording multiple days worth of video
 
 echo -e "
 Updating the Media Services account to use one ${YELLOW}Premium${NC} streaming endpoint."
